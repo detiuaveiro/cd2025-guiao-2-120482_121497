@@ -188,7 +188,12 @@ class DHTNode(threading.Thread):
         self.logger.debug("Put: %s %s", key, key_hash)
 
         #TODO Replace next code:
+        if contains(self.identification, self.successor_id, key_hash):
+            self.keystore[key_hash] = value
+            self.send(address, {"method": "ACK"})
+
         self.send(address, {"method": "NACK"})
+
 
 
     def get(self, key, address):

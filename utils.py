@@ -11,5 +11,9 @@ def dht_hash(text, seed=0, maximum=2**10):
 
 def contains(begin, end, node):
     """Check node is contained between begin and end in a ring."""
-    #TODO
-    return False
+    # Se os nós estiverem todos na mesma volta
+    if begin <  end:
+        return begin < node  <= end
+    else :
+        # retorna True se estiver no intervalo entre o (incio e 128) e (0 e fim)
+        return begin < node or node < end
