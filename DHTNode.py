@@ -109,6 +109,11 @@ class DHTNode(threading.Thread):
             self.successor_id = identification
             self.successor_addr = addr
             #TODO update finger table
+            ##############################################################################
+
+
+
+            ##############################################################################
             args = {"successor_id": self.identification, "successor_addr": self.addr}
             self.send(addr, {"method": "JOIN_REP", "args": args})
         elif contains(self.identification, self.successor_id, identification):
@@ -119,6 +124,11 @@ class DHTNode(threading.Thread):
             self.successor_id = identification
             self.successor_addr = addr
             #TODO update finger table
+            ##############################################################################
+
+
+
+            ##############################################################################
             self.send(addr, {"method": "JOIN_REP", "args": args})
         else:
             self.logger.debug("Find Successor(%d)", args["id"])
@@ -134,6 +144,11 @@ class DHTNode(threading.Thread):
 
         self.logger.debug("Get successor: %s", args)
         #TODO Implement processing of SUCCESSOR message
+        ##############################################################################
+
+
+
+        ##############################################################################
         pass
                 
     def notify(self, args):
@@ -145,9 +160,7 @@ class DHTNode(threading.Thread):
         """
 
         self.logger.debug("Notify: %s", args)
-        if self.predecessor_id is None or contains(
-            self.predecessor_id, self.identification, args["predecessor_id"]
-        ):
+        if self.predecessor_id is None or contains(self.predecessor_id, self.identification, args["predecessor_id"]):
             self.predecessor_id = args["predecessor_id"]
             self.predecessor_addr = args["predecessor_addr"]
         self.logger.info(self)
@@ -169,12 +182,22 @@ class DHTNode(threading.Thread):
             self.successor_id = from_id
             self.successor_addr = addr
             #TODO update finger table
+            ##############################################################################
+
+
+
+            ##############################################################################
 
         # notify successor of our existence, so it can update its predecessor record
         args = {"predecessor_id": self.identification, "predecessor_addr": self.addr}
         self.send(self.successor_addr, {"method": "NOTIFY", "args": args})
 
         # TODO refresh finger_table
+        ##############################################################################
+
+
+
+        ##############################################################################
 
     def put(self, key, value, address):
         """Store value in DHT.
@@ -188,11 +211,38 @@ class DHTNode(threading.Thread):
         self.logger.debug("Put: %s %s", key, key_hash)
 
         #TODO Replace next code:
-        if contains(self.identification, self.successor_id, key_hash):
-            self.keystore[key_hash] = value
-            self.send(address, {"method": "ACK"})
+        #############################################################################################
 
-        self.send(address, {"method": "NACK"})
+        # Se key_hash estiver entre o antecessor e eu (Eu guardo)
+        if contains(self.predecessor_id, self.identification, key_hash):
+            
+            # Verifica pelo hash
+            if key_hash in self.keystore:
+                self.logger.error("Key already in KeyStore")
+                self.send(address, {"method": "NACK"})        # Chave já existe
+
+            else :
+                self.keystore[key_hash] = value               # Armazena a chave pelo hash
+                self.send(address, {'method': 'ACK'})         # Confirmação de sucesso
+
+        else:
+            # Manda a requisição para o préximo nó
+            dic = {"method": "PUT", "args": {"key": key, "value": value, "from": address}} 
+            self.send(self.successor_addr,dic)
+
+            # Aguarda resposta do próximo nó
+            payload, addr = self.recv()
+            if payload is not None:
+                response = pickle.loads(payload)
+                if response["method"] == "ACK":
+                    self.logger.debug("PUT foi processado com sucesso pelo sucessor")
+                    self.send(address, response)  # Repassa o ACK ao cliente
+                elif response["method"] == "NACK":
+                    self.logger.debug("PUT falhou no sucessor")
+                    self.send(address, response)  # Repassa o erro ao cliente
+
+
+        ####################################################################################################
 
 
 
@@ -207,8 +257,39 @@ class DHTNode(threading.Thread):
         self.logger.debug("Get: %s %s", key, key_hash)
 
         #TODO Replace next code:
-        self.send(address, {"method": "NACK"})
+        ####################################################################################################
 
+        # Se a chave estiver no intervalo entre o antecessor e eu
+        if contains(self.predecessor_id, self.identification, key_hash):
+            
+            # Retorna o valor
+            if key_hash in self.keystore:
+                value = self.keystore[key_hash]
+                self.send(address, {'method': 'ACK', "args": value})
+
+            # Chave não encontrada
+            else:
+                self.logger.error("Key Not Found")
+                self.send(address, {"method": "NACK"})
+
+        # Procura no interval do proximo nó
+        else:
+            dic = {"method": "GET", "args": {"key": key, "from": address}}
+            self.send(self.successor_addr,dic)
+
+            # Aguarda resposta do sucessor
+            payload, addr = self.recv()
+            if payload is not None:
+                response = pickle.loads(payload)
+                if response["method"] == "ACK":
+                    self.logger.debug("GET foi processado com sucesso pelo sucessor")
+                    self.send(address, response)  # Repassa o ACK ao cliente
+                elif response["method"] == "NACK":
+                    self.logger.debug("GET falhou no sucessor")
+                    self.send(address, response)  # Repassa o erro ao cliente
+
+
+        ####################################################################################################
 
     def run(self):
         self.socket.bind(self.addr)
